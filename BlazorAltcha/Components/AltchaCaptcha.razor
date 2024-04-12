@@ -1,0 +1,110 @@
+﻿@using System.Text.Json
+@using System.Diagnostics.CodeAnalysis
+@inherits InputBase<bool>
+@implements IAsyncDisposable
+@inject ILogger<AltchaCaptcha> Logger
+@inject IJSRuntime JS
+@inject IStringLocalizer<LocalizationResource> L
+
+<div class="form-group">
+    <altcha-widget @ref="elementRef" challengejson="@GetChallengeJson()" id="@Id"
+                   strings='@CreateSerializedAltchaStrings()'></altcha-widget>
+    <LocalizedValidationMessage For=this.ValueExpression />
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "altcha";
+
+    private DotNetObjectReference<AltchaCaptcha>? objRef;
+    private ElementReference elementRef;
+
+    private IJSObjectReference? module;
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import",
+                "./Components/AltchaCaptcha.razor.js");
+
+            objRef = DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("connectElement", elementRef, objRef);
+        }
+    }
+
+    public async Task Reset()
+    {
+        if (module is not null)
+        {
+            await module.InvokeVoidAsync("resetAltcha", elementRef);
+        }
+        base.CurrentValue = false;
+    }
+
+    [JSInvokable]
+    public void StatusChanged(string status)
+    {
+        Logger.LogDebug($"Altcha status: {status}");
+    }
+
+    [JSInvokable]
+    public async ValueTask CheckPayload(string payload)
+    {
+        var result = AltchaHelper.VerifyChallengeJson(payload);
+        Logger.LogDebug($"Altcha payload valid: {result}");
+        if (result == false)
+        {
+            await Reset();
+        }
+        else
+        {
+            base.CurrentValue = true;
+        }
+    }
+
+    private string GetChallengeJson()
+    {
+        return AltchaHelper.CreateChallengeJson();
+    }
+
+    private string CreateSerializedAltchaStrings()
+    {
+        AltchaStrings altchaStrings = new()
+            {
+                Label = L["altcha_label"],
+                Footer = L["altcha_footer"],
+                Error = L["altcha_error"],
+                Expired = L["altcha_expired"],
+                Verified = L["altcha_verified"],
+                Verifying = L["altcha_verifying"],
+                WaitAlert = L["altcha_wait_alert"]
+            };
+        JsonSerializerOptions options = new()
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+        return JsonSerializer.Serialize(altchaStrings, options);
+    }
+
+    protected override bool TryParseValueFromString(string? value, out bool result, [NotNullWhen(false)] out string? validationErrorMessage)
+       => throw new NotSupportedException($"This component does not parse string inputs. Bind to the '{nameof(CurrentValue)}' property, not '{nameof(CurrentValueAsString)}'.");
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        if (module is not null)
+        {
+            await module.DisposeAsync();
+        }
+    }
+
+    public class AltchaStrings
+    {
+        public required string Label { get; set; }
+        public required string Footer { get; set; }
+        public required string Error { get; set; }
+        public required string Expired { get; set; }
+        public required string Verified { get; set; }
+        public required string Verifying { get; set; }
+        public required string WaitAlert { get; set; }
+    }
+}

@@ -1,0 +1,64 @@
+﻿@page "/altcha"
+@using System.ComponentModel.DataAnnotations
+@inject IStringLocalizer<LocalizationResource> L;
+
+<PageTitle>Altcha</PageTitle>
+
+<h1>Altcha</h1>
+
+@if (success)
+{
+    <p class="alert alert-success">
+        Hi @(Model!.Name)
+    </p>
+}
+else
+{
+
+    <EditForm Enhance Model="@Model" FormName="AltchaForm" OnValidSubmit="@SubmitForm" class="form">
+        <DataAnnotationsValidator />
+        <LocalizedValidationSummary />
+
+        <div class="form-group">
+            <label for="name">@L["name"]</label>
+            <InputText id="name" class="form-control" @bind-Value="Model!.Name" />
+            <LocalizedValidationMessage For="() => Model!.Name" />
+        </div>
+
+        <br />
+
+        <AltchaCaptcha @ref="altcha" Id="altcha" @bind-Value="Model!.CaptchaResult" />
+
+        <br />
+
+        <button type="submit">@L["submit"]</button>
+    </EditForm>
+
+}
+
+@code {
+
+    private SampleModel? Model { get; set; }
+    private AltchaCaptcha? altcha;
+    private bool success = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        Model ??= new();
+    }
+
+    private void SubmitForm()
+    {
+        success = true;
+    }
+
+    public class SampleModel
+    {
+        [Required(ErrorMessage = "required")]
+        public string? Name { get; set; }
+        [Required]
+        [Range(typeof(bool), "true", "true", ErrorMessage = "altcha_required")]
+        public bool CaptchaResult { get; set; } = false;
+    }
+}
